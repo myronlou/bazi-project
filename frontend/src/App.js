@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { 
   Container, TextField, Button, Paper, Typography,
-  Grid, Alert, CircularProgress
+  Grid, Alert, CircularProgress, MenuItem, Select, FormControl, InputLabel
 } from '@mui/material';
 
 function App() {
-  const [form, setForm] = useState({ date: '', time: '12:00' });
+  // We add "gender" to the form so user can pick male/female
+  const [form, setForm] = useState({ date: '', time: '12:00', gender: 'male' });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,6 +22,7 @@ function App() {
       const response = await axios.post('http://localhost:5001/api/bazi', {
         birthdate: form.date,
         birthtime: form.time,
+        gender: form.gender  // pass gender to the backend
       });
       if (!response.data.success) throw new Error(response.data.message);
       setResult(response.data);
@@ -56,14 +58,16 @@ function App() {
   const monthGod = result?.shishen?.['月柱'] || '';
   const yearGod  = result?.shishen?.['年柱'] || '';
 
-  // The new structure with branch Ten Gods
-  // e.g. { 年柱: { stem:"正財", branch:["偏印","傷官"] }, 月柱: {...}, etc. }
+  // Earthly Branch Ten Gods (array of { stem, tenGod })
   const shishenDetail = result?.shishenDetail || {};
 
   // Five Elements, Missing, Favorable
   const fiveElementCounts = result?.fiveElementCounts || {};
   const missingElements   = result?.missingElements || [];
   const favorableElement  = result?.favorableElement || '';
+
+  // DaYun array
+  const daYun = result?.daYun || [];
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -72,13 +76,13 @@ function App() {
           八字命盤計算器
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          請輸入公曆出生時間
+          請輸入公曆出生時間（並選擇性別）
         </Typography>
 
         {/* Input Form */}
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={4}>
               <TextField
                 label="出生日期"
                 type="date"
@@ -89,7 +93,7 @@ function App() {
                 onChange={e => setForm({ ...form, date: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={4}>
               <TextField
                 label="出生時間"
                 type="time"
@@ -99,6 +103,20 @@ function App() {
                 value={form.time}
                 onChange={e => setForm({ ...form, time: e.target.value })}
               />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth>
+                <InputLabel id="gender-label">性別</InputLabel>
+                <Select
+                  labelId="gender-label"
+                  label="性別"
+                  value={form.gender}
+                  onChange={e => setForm({ ...form, gender: e.target.value })}
+                >
+                  <MenuItem value="male">男</MenuItem>
+                  <MenuItem value="female">女</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <Button 
@@ -168,7 +186,7 @@ function App() {
             <Grid container spacing={2} sx={{ textAlign: 'center', mb: 4 }}>
               {['時柱','日柱','月柱','年柱'].map((pillarKey) => {
                 const detail = shishenDetail[pillarKey] || {};
-                // detail.branch is an array of Ten Gods for hidden stems
+                // detail.branch is now an array of { stem: '戊', tenGod: '偏印' } objects
                 return (
                   <Grid item xs={12} sm={3} key={pillarKey}>
                     <Paper sx={{ p: 2 }}>
@@ -176,13 +194,13 @@ function App() {
                         {pillarKey} 藏干
                       </Typography>
                       {detail.branch && detail.branch.length > 0 ? (
-                        detail.branch.map((bg, idx) => (
-                          <Typography 
-                            variant="body2" 
-                            color="text.secondary" 
+                        detail.branch.map((obj, idx) => (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
                             key={idx}
                           >
-                            {bg || '無'}
+                            {obj.stem} ({obj.tenGod})
                           </Typography>
                         ))
                       ) : (
@@ -220,6 +238,24 @@ function App() {
             <Typography variant="body1" sx={{ mt: 1 }}>
               五行喜用神：{favorableElement || '未知'}
             </Typography>
+
+            {/* 大運 (10-year luck pillars) */}
+            {result.daYun && result.daYun.length > 0 && (
+              <>
+                <Typography variant="h5" gutterBottom sx={{ mt: 3 }}>
+                  大運
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  (每十年一運，僅示例)
+                </Typography>
+                {result.daYun.map((dy) => (
+                  <Typography key={dy.index} variant="body2">
+                    第{dy.index}運：{dy.pillar}
+                    （{dy.startAge}歲 ~ {dy.endAge}歲）
+                  </Typography>
+                ))}
+              </>
+            )}
           </>
         )}
       </Paper>
