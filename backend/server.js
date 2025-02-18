@@ -34,6 +34,21 @@ const branchHiddenStems = {
   '亥': ['壬','甲']
 };
 
+const dominantHiddenStem = {
+  '子': '癸',
+  '丑': '己',
+  '寅': '甲',
+  '卯': '乙',
+  '辰': '戊',
+  '巳': '丙',
+  '午': '丁',
+  '未': '己',
+  '申': '庚',
+  '酉': '辛',
+  '戌': '戊',
+  '亥': '壬'
+};
+
 // Stem info
 const stemInfo = {
   '甲': { element: 'wood',  yin: false },
@@ -89,15 +104,15 @@ function calculateTenGod(dayStem, otherStem) {
 
   // 1) 同我者 => 比肩(同性), 劫财(异性)
   if (ot.element === dm.element) {
-    return samePolarity ? '比肩' : '劫财';
+    return samePolarity ? '比肩' : '劫財';
   }
   // 2) 我生者 => 食神(同性), 伤官(异性)
   if (outputs[dm.element] === ot.element) {
-    return samePolarity ? '食神' : '伤官';
+    return samePolarity ? '食神' : '傷官';
   }
   // 3) 我克者 => 正财(异性), 偏财(同性)
   if (wealth[dm.element] === ot.element) {
-    return diffPolarity ? '正财' : '偏财';
+    return diffPolarity ? '正財' : '偏財';
   }
   // 4) 生我者 => 正印(异性), 偏印(同性)
   if (resources[dm.element] === ot.element) {
@@ -105,7 +120,7 @@ function calculateTenGod(dayStem, otherStem) {
   }
   // 5) 克我者 => 正官(异性), 七杀(同性)
   if (officer[dm.element] === ot.element) {
-    return diffPolarity ? '正官' : '七杀';
+    return diffPolarity ? '正官' : '七殺';
   }
   return '';
 }
@@ -211,46 +226,57 @@ function stepGanZhi(start, steps, forward=true) {
 function calculateStartAge(birthdate, forward) {
   const days = 20; // placeholder
   const rawAge = days / 3;
-  const years = Math.floor(rawAge);
-  const fraction = rawAge - years;
-  const months = Math.round(fraction * 12);
-  return { years, months };
+  const startAge = Math.floor(rawAge);
+  return startAge;
 }
 
-/** 11) Calculate DaYun array */
-function calculateDaYun(yearGZ, monthGZ, birthdate, gender) {
+/** 11) Calculate DaYun array (now 10 cycles, with TenGod for each pillar) */
+function calculateDaYun(yearGZ, monthGZ, birthdate, gender, dayStem) {
   const yearStem = yearGZ[0];
   const isYearYang = isYangYearStem(yearStem);
 
-  // Determine forward or backward
+  // forward or backward
   let forward = true;
-  // 阳年男 / 阴年女 => forward
-  // 阴年男 / 阳年女 => backward
   if ((isYearYang && gender === 'male') || (!isYearYang && gender === 'female')) {
     forward = true;
   } else {
     forward = false;
   }
 
-  const { years, months } = calculateStartAge(birthdate, forward);
-  const startAgeFloat = years + months/12;
+  const [yyyyStr] = birthdate.split('-');
+  const birthYear = parseInt(yyyyStr, 10);
 
+  let currentAge = calculateStartAge(birthdate, forward); // integer
   const baseIndex = JIAZI_60.indexOf(monthGZ);
-  if (baseIndex < 0) {
-    return [];
-  }
+  if (baseIndex < 0) return [];
 
-  const daYunList = [];
-  let currentAge = startAgeFloat; 
+  // first DaYun => +1 step from month pillar
   let currentPillar = stepGanZhi(monthGZ, 1, forward);
 
-  for (let i = 1; i <= 8; i++) {
+  const daYunList = [];
+  for (let i = 1; i <= 10; i++) {
+    // 1) main Heavenly Stem => main TenGod
+    const daYunStem = currentPillar.charAt(0);
+    const daYunTenGod = calculateTenGod(dayStem, daYunStem);
+
+    // 2) “副星” => use the branch’s dominant hidden stem => e.g. 午 => 丁
+    const daYunBranch = currentPillar.charAt(1);
+    const fuXingArray = calculateBranchTenGods(dayStem, daYunBranch);
+
+    const startCalendarYear = birthYear + currentAge;
+    const endCalendarYear = birthYear + currentAge + 10 - 1;
+
     const thisDaYun = {
       index: i,
       pillar: currentPillar,
-      startAge: parseFloat(currentAge.toFixed(2)),
-      endAge: parseFloat((currentAge + 10).toFixed(2))
+      tenGod: daYunTenGod,  // main star
+      fuXing: fuXingArray,               // “副星”
+      startAge: currentAge,
+      endAge: currentAge + 10,
+      startCalendarYear,
+      endCalendarYear
     };
+
     daYunList.push(thisDaYun);
 
     currentAge += 10;
@@ -258,6 +284,38 @@ function calculateDaYun(yearGZ, monthGZ, birthdate, gender) {
   }
 
   return daYunList;
+}
+
+/**
+ * Calculate 流年 (annual pillars) for age 1..100
+ * Each year => baseYearIndex + i => pillar
+ * Also show multiple hidden stems as “副星.”
+ */
+function calculateLiuNian(yearGZ, dayStem, birthYear) {
+  const baseIndex = JIAZI_60.indexOf(yearGZ);
+  if (baseIndex < 0) return [];
+
+  const liuNianList = [];
+  // We do age 1..100 => so birth year + i
+  for (let i = 1; i <= 100; i++) {
+    const pillar = JIAZI_60[(baseIndex + i) % 60];
+    const stem = pillar.charAt(0);
+    const branch = pillar.charAt(1);
+
+    const mainTenGod = calculateTenGod(dayStem, stem);
+    const fuXingArray = calculateBranchTenGods(dayStem, branch);
+
+    const actualYear = birthYear + i;
+
+    liuNianList.push({
+      age: i,
+      pillar,
+      tenGod: mainTenGod,
+      fuXing: fuXingArray,
+      year: actualYear
+    });
+  }
+  return liuNianList;
 }
 
 /** 12) Main BaZi Calculation
@@ -324,7 +382,11 @@ function calculateBazi(birthdate, birthtime, gender='male') {
   const favorableElement  = findFavorableElement(dayStem, fiveElementCounts);
 
   // Generate DaYun (eight 10-year luck pillars)
-  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, gender);
+  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, gender, dayStem);
+
+  // 流年 => from age 1..100 => each with fuXing array
+  const birthYearNum = year;
+  const liuNian = calculateLiuNian(yearGZ, dayStem, birthYearNum);
 
   return {
     success: true,
@@ -335,7 +397,8 @@ function calculateBazi(birthdate, birthtime, gender='male') {
     fiveElementCounts,
     missingElements,
     favorableElement,
-    daYun
+    daYun,
+    liuNian
   };
 }
 

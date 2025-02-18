@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { 
   Container, TextField, Button, Paper, Typography,
-  Grid, Alert, CircularProgress, MenuItem, Select, FormControl, InputLabel
+  Grid, Alert, CircularProgress, MenuItem, Select, FormControl, InputLabel, Box
 } from '@mui/material';
 
 function App() {
@@ -68,6 +68,8 @@ function App() {
 
   // DaYun array
   const daYun = result?.daYun || [];
+  // LiuNian array
+  const liuNian = result?.liuNian || [];
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -141,7 +143,7 @@ function App() {
         {result && (
           <>
             <Typography variant="h5" gutterBottom>
-              四柱八字
+              八字
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
               農曆 {result.lunar.lunarYear}年 {result.lunar.lunarMonthName}{' '}
@@ -175,13 +177,13 @@ function App() {
               <Grid item xs={3}><Typography variant="h4">{year.branch}</Typography></Grid>
             </Grid>
 
-            {/* 地支藏干十神 (Hidden stems Ten Gods) */}
+            {/* 地支藏干十神 (Hidden stems Ten Gods) 
             <Typography variant="h5" gutterBottom>
               地支藏干十神
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
               (對每個地支的藏干計算十神)
-            </Typography>
+            </Typography>*/}
 
             <Grid container spacing={2} sx={{ textAlign: 'center', mb: 4 }}>
               {['時柱','日柱','月柱','年柱'].map((pillarKey) => {
@@ -191,7 +193,7 @@ function App() {
                   <Grid item xs={12} sm={3} key={pillarKey}>
                     <Paper sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        {pillarKey} 藏干
+                        {pillarKey}
                       </Typography>
                       {detail.branch && detail.branch.length > 0 ? (
                         detail.branch.map((obj, idx) => (
@@ -239,21 +241,115 @@ function App() {
               五行喜用神：{favorableElement || '未知'}
             </Typography>
 
-            {/* 大運 (10-year luck pillars) */}
+            {/* 大運 (3-row table with 10 columns) */}
             {result.daYun && result.daYun.length > 0 && (
               <>
                 <Typography variant="h5" gutterBottom sx={{ mt: 3 }}>
                   大運
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  (每十年一運，僅示例)
+                  (每十年一運，顯示十神與柱)
                 </Typography>
-                {result.daYun.map((dy) => (
-                  <Typography key={dy.index} variant="body2">
-                    第{dy.index}運：{dy.pillar}
-                    （{dy.startAge}歲 ~ {dy.endAge}歲）
-                  </Typography>
-                ))}
+
+                {/* 3 rows, 10 columns */}
+                <Grid container spacing={1} sx={{ textAlign: 'center', mb: 4 }}>
+                  {/* Row 1: startAge */}
+                  <Grid item xs={12}>
+                    <Grid container>
+                      {result.daYun.map((dy) => (
+                        <Grid item xs={12} sm={1.2} key={dy.index}>
+                          <Typography variant="body2">
+                            {dy.startAge}歲 ~ {dy.endAge}歲 ({dy.startCalendarYear} - {dy.endCalendarYear})
+                          </Typography>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+
+                  {/* Row 2: TenGod */}
+                  <Grid item xs={12}>
+                    <Grid container>
+                      {result.daYun.map((dy) => (
+                        <Grid item xs={12} sm={1.2} key={dy.index}>
+                          <Typography variant="body2" color="text.secondary">
+                            {dy.tenGod}
+                          </Typography>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+
+                  {/* Row 3: Pillar */}
+                  <Grid item xs={12}>
+                    <Grid container>
+                      {result.daYun.map((dy) => (
+                        <Grid item xs={12} sm={1.2} key={dy.index}>
+                          <Typography variant="body2" color="text.secondary">
+                            {dy.pillar}
+                          </Typography>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+
+                  {/* Row 4: multiple 副星 */}
+                  <Grid item xs={12}>
+                    <Grid container>
+                      {result.daYun.map((dy) => (
+                        <Grid item xs={1.2} key={dy.index}>
+                          {dy.fuXing && dy.fuXing.length > 0 ? (
+                            dy.fuXing.map((fx, idx) => (
+                              <Typography variant="body2" color="text.secondary" key={idx}>
+                                {fx.stem} ({fx.tenGod})
+                              </Typography>
+                            ))
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              無
+                            </Typography>
+                          )}
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Grid>
+                </Grid>
+              </>
+            )}
+
+            {/* 流年 (1..100 yrs) */}
+            {liuNian && liuNian.length > 0 && (
+              <>
+                <Typography variant="h5" gutterBottom sx={{ mt: 3 }}>
+                  流年 (1~100 歲)
+                </Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  (每年一柱，顯示多個副星)
+                </Typography>
+
+                {/* We'll show a scrollable list to avoid a huge page */}
+                <Box sx={{ maxHeight: 400, overflowY: 'auto', p: 1, border: '1px solid #ccc', mb: 2 }}>
+                  {liuNian.map((ln) => (
+                    <Box key={ln.age} sx={{ mb: 1 }}>
+                      {/* The main info: age, pillar, and main Ten God */}
+                      <Typography variant="subtitle2">
+                        {ln.age}歲 ({ln.year}): {ln.pillar} (主星: {ln.tenGod})
+                      </Typography>
+
+                      {/* Now we map over ln.fuXing to display multiple hidden stems (副星) */}
+                      {ln.fuXing && ln.fuXing.length > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          副星:
+                          {ln.fuXing.map((fx, idx) => (
+                            <span key={idx}>
+                              {' '}
+                              {fx.stem}({fx.tenGod})
+                            </span>
+                          ))}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
               </>
             )}
           </>
