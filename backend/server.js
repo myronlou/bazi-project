@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const LunarCalendar = require('lunar-calendar');
+const { Solar } = require('lunar-javascript');
+const moment = require('moment-timezone');
 
 const app = express();
 app.use(cors());
@@ -223,63 +225,168 @@ function stepGanZhi(start, steps, forward=true) {
 }
 
 /** 10) Placeholder for startAge calculation */
-function calculateStartAge(birthdate, forward) {
-  const days = 20; // placeholder
-  const rawAge = days / 3;
-  const startAge = Math.floor(rawAge);
+/**
+ * Get an array of solar terms in { name, date } ascending for a given year.
+ * We'll parse the "JieQi table" from the lunar-javascript library.
+ */
+function getSolarTermsOfYear(year) {
+  const allowedTerms = new Set(["立春","惊蛰","清明","立夏","芒种","小暑","立秋","白露","寒露","立冬","大雪","小寒"]);
+  const solarJan1 = Solar.fromYmd(year, 1, 1);
+  const lunarJan1 = solarJan1.getLunar();
+  const jieQiTable = lunarJan1.getJieQiTable();
+
+  const results = [];
+  for (const termName in jieQiTable) {
+    // 只保留允许的“节”
+    if (!allowedTerms.has(termName)) continue;
+    
+    const solarObj = jieQiTable[termName];
+    const termDate = moment.tz({
+      year: solarObj.getYear(),
+      month: solarObj.getMonth() - 1,
+      date: solarObj.getDay(),
+      hour: solarObj.getHour(),
+      minute: solarObj.getMinute(),
+      second: solarObj.getSecond()
+    }, 'Asia/Shanghai');
+    
+    results.push({
+      name: termName,
+      date: termDate.toDate()
+    });
+  }
+  
+  results.sort((a, b) => a.date - b.date);
+  return results;
+}
+
+function findSolarTerm(birthMoment, forward) {
+  const birthDate = moment.tz(birthMoment, 'Asia/Shanghai');
+  const birthYear = birthDate.year();
+  
+  // Check 3 years to handle year boundaries
+  const yearsToCheck = forward 
+    ? [birthYear - 1, birthYear, birthYear + 1]
+    : [birthYear + 1, birthYear, birthYear - 1];
+
+  let terms = [];
+  for (const year of yearsToCheck) {
+    try {
+      terms.push(...getSolarTermsOfYear(year));
+    } catch(e) {/* handle error */}
+  }
+
+  terms.sort((a, b) => a.date - b.date);
+  const birthTime = birthDate.valueOf();
+
+  if (forward) {
+    return terms.find(t => t.date.getTime() > birthTime);
+  } else {
+    const filtered = terms.filter(t => t.date.getTime() < birthTime);
+    return filtered.length > 0 ? filtered[filtered.length - 1] : null;
+  }
+}
+
+function calculateStartAge(birthdate, birthtime, forward, timezone) {
+  // 直接解析输入的上海时间，不再额外转换
+  const birthMoment = moment.tz(`${birthdate} ${birthtime}`, 'YYYY-MM-DD HH:mm', timezone);
+
+  if (!birthMoment.isValid()) return 0;
+
+  const foundTerm = findSolarTerm(birthMoment.toDate(), forward);
+  if (!foundTerm) return 0;
+
+  // 同样用输入的 timezone 解析节气时间
+  const termMoment = moment.tz(foundTerm.date, timezone);
+  
+  // 调试输出
+  console.log(`出生时间: ${birthMoment.format('YYYY-MM-DD HH:mm')}`);
+  console.log(`选中的节气: ${foundTerm.name}，时间: ${termMoment.format('YYYY-MM-DD HH:mm')}`);
+  
+  const diffMs = forward 
+    ? termMoment - birthMoment
+    : birthMoment - termMoment;
+
+  const totalDays = Math.abs(diffMs) / (1000 * 3600 * 24);
+  console.log(`相差天数: ${totalDays.toFixed(2)} 天`);
+
+  const startAge = totalDays / 3;
+  console.log(`计算出的起运年龄: ${startAge.toFixed(2)} 岁`);
+
   return startAge;
 }
 
-/** 11) Calculate DaYun array (now 10 cycles, with TenGod for each pillar) */
-function calculateDaYun(yearGZ, monthGZ, birthdate, gender, dayStem) {
-  const yearStem = yearGZ[0];
-  const isYearYang = isYangYearStem(yearStem);
 
-  // forward or backward
-  let forward = true;
-  if ((isYearYang && gender === 'male') || (!isYearYang && gender === 'female')) {
-    forward = true;
+/** 11) Calculate DaYun array (now 10 cycles, with TenGod for each pillar) */
+function calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, timezone, roundingMethod = 'round') {
+  // 1) Determine direction
+  const yearStem = yearGZ[0];
+  const isYearYang = ['甲','丙','戊','庚','壬'].includes(yearStem);
+  const forward = (isYearYang && gender === 'male') || (!isYearYang && gender === 'female');
+
+  // 2) Calculate precise starting age (using the provided timezone directly)
+  const rawAge = calculateStartAge(birthdate, birthtime, forward, timezone);
+  console.log(`原始起運年齡: ${rawAge.toFixed(2)} 岁`);
+
+  // 3) 根据 roundingMethod 进行处理
+  let roundedAge;
+  if (roundingMethod === 'ceil') {
+    roundedAge = Math.ceil(rawAge);
+  } else if (roundingMethod === 'round') {
+    roundedAge = Math.round(rawAge);
+  } else if (roundingMethod === 'floor') {
+    roundedAge = Math.floor(rawAge);
   } else {
-    forward = false;
+    // 默认采用四舍五入
+    roundedAge = Math.round(rawAge);
+  }
+  console.log(`四舍五入后的起運年齡 (${roundingMethod}): ${roundedAge} 岁`);
+
+  // 4) 起运公历年份统一用出生年份加上取整后的起运年龄（无论顺行还是逆行）
+  const birthYear = parseInt(birthdate.split('-')[0], 10);
+  const startCalendarYear = birthYear + roundedAge;
+
+  // 5) Validate monthGZ position
+  const baseIndex = JIAZI_60.indexOf(monthGZ);
+  if (baseIndex < 0) {
+    throw new Error(`Invalid month Ganzhi: ${monthGZ}`);
   }
 
-  const [yyyyStr] = birthdate.split('-');
-  const birthYear = parseInt(yyyyStr, 10);
-
-  let currentAge = calculateStartAge(birthdate, forward); // integer
-  const baseIndex = JIAZI_60.indexOf(monthGZ);
-  if (baseIndex < 0) return [];
-
-  // first DaYun => +1 step from month pillar
+  // 6) Generate DaYun cycles
   let currentPillar = stepGanZhi(monthGZ, 1, forward);
-
   const daYunList = [];
+  
+  // 这里我们对每步大运的起运年龄和终止年龄都进行取整处理
+  let currentAge = roundedAge;
+  let currentYear = startCalendarYear;
+
   for (let i = 1; i <= 10; i++) {
-    // 1) main Heavenly Stem => main TenGod
+    // Calculate TenGod relationships
     const daYunStem = currentPillar.charAt(0);
     const daYunTenGod = calculateTenGod(dayStem, daYunStem);
-
-    // 2) “副星” => use the branch’s dominant hidden stem => e.g. 午 => 丁
+    
+    // Calculate hidden Branch relationships
     const daYunBranch = currentPillar.charAt(1);
     const fuXingArray = calculateBranchTenGods(dayStem, daYunBranch);
 
-    const startCalendarYear = birthYear + currentAge;
-    const endCalendarYear = birthYear + currentAge + 10 - 1;
+    // 对当前运龄和结束运龄进行取整处理
+    const startAgeRounded = Math.round(currentAge);
+    const endAgeRounded = Math.round(currentAge + 10);
 
-    const thisDaYun = {
+    daYunList.push({
       index: i,
       pillar: currentPillar,
-      tenGod: daYunTenGod,  // main star
-      fuXing: fuXingArray,               // “副星”
-      startAge: currentAge,
-      endAge: currentAge + 10,
-      startCalendarYear,
-      endCalendarYear
-    };
+      tenGod: daYunTenGod,
+      fuXing: fuXingArray,
+      startAge: startAgeRounded,
+      endAge: endAgeRounded,
+      startCalendarYear: currentYear,
+      endCalendarYear: currentYear + 9 // 完整10年的跨度
+    });
 
-    daYunList.push(thisDaYun);
-
+    // Prepare next iteration
     currentAge += 10;
+    currentYear += 10;
     currentPillar = stepGanZhi(currentPillar, 1, forward);
   }
 
@@ -321,7 +428,7 @@ function calculateLiuNian(yearGZ, dayStem, birthYear) {
 /** 12) Main BaZi Calculation
  *     IMPORTANT: we add "gender" as a third param
  */
-function calculateBazi(birthdate, birthtime, gender='male') {
+function calculateBazi(birthdate, birthtime, gender) {
   const [year, month, day] = birthdate.split('-').map(Number);
   const [hour] = birthtime.split(':').map(Number);
 
@@ -382,7 +489,7 @@ function calculateBazi(birthdate, birthtime, gender='male') {
   const favorableElement  = findFavorableElement(dayStem, fiveElementCounts);
 
   // Generate DaYun (eight 10-year luck pillars)
-  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, gender, dayStem);
+  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem);
 
   // 流年 => from age 1..100 => each with fuXing array
   const birthYearNum = year;
@@ -407,10 +514,10 @@ function calculateBazi(birthdate, birthtime, gender='male') {
 app.post('/api/bazi', (req, res) => {
   try {
     // Destructure gender from req.body
-    const { birthdate, birthtime, gender } = req.body;
+    const { birthdate, birthtime, gender, timezone } = req.body;
 
     // Pass gender into calculateBazi
-    const result = calculateBazi(birthdate, birthtime, gender || 'male');
+    const result = calculateBazi(birthdate, birthtime, gender || 'male', timezone || null);
 
     return res.json(result);
   } catch (err) {

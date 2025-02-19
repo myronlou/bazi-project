@@ -12,6 +12,8 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "lunar-calendar": "^0.1.4"
+    "lunar-calendar": "^0.1.4",
+    "lunar-javascript": "^1.7.0",
+    "moment-timezone": "^0.5.47"
   }
 }

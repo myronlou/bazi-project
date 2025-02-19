@@ -5,12 +5,29 @@ import {
   Grid, Alert, CircularProgress, MenuItem, Select, FormControl, InputLabel, Box
 } from '@mui/material';
 
+const TIMEZONES = [
+  { value: 'Asia/Hong_Kong', label: '香港時間 (Asia/Hong_Kong)' },
+  { value: 'Asia/Taipei', label: '台灣時間 (Asia/Taipei)' },
+];
+
 function App() {
   // We add "gender" to the form so user can pick male/female
-  const [form, setForm] = useState({ date: '', time: '12:00', gender: 'male' });
+  const [form, setForm] = useState({ date: '', time: '12:00', gender: 'male', timezone: 'Asia/Hong_Kong', });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  function getSolarAge(birthDateStr) {
+    if (!birthDateStr) return null;
+    const birth = new Date(birthDateStr);
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,6 +75,10 @@ function App() {
   const monthGod = result?.shishen?.['月柱'] || '';
   const yearGod  = result?.shishen?.['年柱'] || '';
 
+  // Compute current age if birthdate is provided
+  const currentAge = getSolarAge(form.date);
+  const currentYear = new Date().getFullYear();
+
   // Earthly Branch Ten Gods (array of { stem, tenGod })
   const shishenDetail = result?.shishenDetail || {};
 
@@ -70,6 +91,24 @@ function App() {
   const daYun = result?.daYun || [];
   // LiuNian array
   const liuNian = result?.liuNian || [];
+
+  // From the arrays, find the current dayun and liuNian based on current age
+  const currentDayun = result?.daYun?.find(dy => currentYear >= dy.startCalendarYear && currentYear <= dy.endCalendarYear);
+  const currentLiuNian = result?.liuNian?.find((ln) => ln.year === currentYear);
+
+  if (currentDayun) {
+    shishenDetail['當前大運'] = {
+      stem: currentDayun.tenGod,
+      branch: currentDayun.fuXing
+    };
+  }
+  
+  if (currentLiuNian) {
+    shishenDetail['當前流年'] = {
+      stem: currentLiuNian.tenGod,
+      branch: currentLiuNian.fuXing
+    };
+  }
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -84,7 +123,7 @@ function App() {
         {/* Input Form */}
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <TextField
                 label="出生日期"
                 type="date"
@@ -95,7 +134,7 @@ function App() {
                 onChange={e => setForm({ ...form, date: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <TextField
                 label="出生時間"
                 type="time"
@@ -106,7 +145,7 @@ function App() {
                 onChange={e => setForm({ ...form, time: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid item xs={12} sm={3}>
               <FormControl fullWidth>
                 <InputLabel id="gender-label">性別</InputLabel>
                 <Select
@@ -117,6 +156,23 @@ function App() {
                 >
                   <MenuItem value="male">男</MenuItem>
                   <MenuItem value="female">女</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth>
+                <InputLabel id="timezone-label">時區</InputLabel>
+                <Select
+                  labelId="timezone-label"
+                  label="時區"
+                  value={form.timezone}
+                  onChange={e => setForm({ ...form, timezone: e.target.value })}
+                >
+                  {TIMEZONES.map((tz) => (
+                    <MenuItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -153,28 +209,36 @@ function App() {
             {/* Display the 4 Pillars & Ten Gods (Heavenly Stems) */}
             <Grid container spacing={2} sx={{ textAlign: 'center', mb: 4 }}>
               {/* Row 1: Labels */}
-              <Grid item xs={3}><Typography variant="subtitle2">時柱</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">日柱</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">月柱</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">年柱</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">時柱</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">日柱</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">月柱</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">年柱</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">當前大運</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">當前流年</Typography></Grid>
 
               {/* Row 2: Ten Gods (Heavenly Stems) */}
-              <Grid item xs={3}><Typography variant="subtitle2">{hourGod}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">{dayGod}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">{monthGod}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="subtitle2">{yearGod}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{hourGod}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{dayGod}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{monthGod}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{yearGod}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{currentDayun ? currentDayun.tenGod : '-'}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="subtitle2">{currentLiuNian ? currentLiuNian.tenGod : '-'}</Typography></Grid>
 
               {/* Row 3: Stems */}
-              <Grid item xs={3}><Typography variant="h4">{hour.stem}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{day.stem}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{month.stem}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{year.stem}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{hour.stem}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{day.stem}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{month.stem}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{year.stem}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{currentDayun ? currentDayun.pillar.charAt(0) : ''}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{currentLiuNian ? currentLiuNian.pillar.charAt(0) : ''}</Typography></Grid>
 
               {/* Row 4: Branches */}
-              <Grid item xs={3}><Typography variant="h4">{hour.branch}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{day.branch}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{month.branch}</Typography></Grid>
-              <Grid item xs={3}><Typography variant="h4">{year.branch}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{hour.branch}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{day.branch}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{month.branch}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{year.branch}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{currentDayun ? currentDayun.pillar.charAt(1) : ''}</Typography></Grid>
+              <Grid item xs={2}><Typography variant="h4">{currentLiuNian ? currentLiuNian.pillar.charAt(1) : ''}</Typography></Grid>
             </Grid>
 
             {/* 地支藏干十神 (Hidden stems Ten Gods) 
@@ -186,11 +250,11 @@ function App() {
             </Typography>*/}
 
             <Grid container spacing={2} sx={{ textAlign: 'center', mb: 4 }}>
-              {['時柱','日柱','月柱','年柱'].map((pillarKey) => {
+              {['時柱','日柱','月柱','年柱','當前大運','當前流年'].map((pillarKey) => {
                 const detail = shishenDetail[pillarKey] || {};
                 // detail.branch is now an array of { stem: '戊', tenGod: '偏印' } objects
                 return (
-                  <Grid item xs={12} sm={3} key={pillarKey}>
+                  <Grid item xs={12} sm={2} key={pillarKey}>
                     <Paper sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
                         {pillarKey}
