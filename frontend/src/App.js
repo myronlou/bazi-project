@@ -39,7 +39,8 @@ function App() {
       const response = await axios.post('http://localhost:5001/api/bazi', {
         birthdate: form.date,
         birthtime: form.time,
-        gender: form.gender  // pass gender to the backend
+        gender: form.gender,
+        timezone: form.timezone
       });
       if (!response.data.success) throw new Error(response.data.message);
       setResult(response.data);
@@ -280,7 +281,7 @@ function App() {
               })}
             </Grid>
 
-            {/* 五行分析 */}
+            {/* 五行分析 
             <Typography variant="h5" gutterBottom>
               五行分析
             </Typography>
@@ -303,7 +304,7 @@ function App() {
 
             <Typography variant="body1" sx={{ mt: 1 }}>
               五行喜用神：{favorableElement || '未知'}
-            </Typography>
+              </Typography>*/}
 
             {/* 大運 (3-row table with 10 columns) */}
             {result.daYun && result.daYun.length > 0 && (
@@ -311,9 +312,12 @@ function App() {
                 <Typography variant="h5" gutterBottom sx={{ mt: 3 }}>
                   大運
                 </Typography>
+                {result.daYun && result.daYun.length > 0 && (
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  (每十年一運，顯示十神與柱)
+                  出生後{result.daYun[0].startYear}年{result.daYun[0].startMonth}個月開始行大運，每大運年{result.daYun[0].startCalendarMonth}月起運
+                  (每十年一大運，顯示十神與柱) 
                 </Typography>
+                )}
 
                 {/* 3 rows, 10 columns */}
                 <Grid container spacing={1} sx={{ textAlign: 'center', mb: 4 }}>

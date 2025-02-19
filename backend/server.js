@@ -8,11 +8,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========== 1) BaZi Constants ==========
+// ========== 1) 八字常數 ==========
 const TIANGAN = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
 const DIZHI = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
 
-// Build 60 JiaZi array
+// 建立六十甲子陣列
 const JIAZI_60 = [];
 for (let i = 0; i < 60; i++) {
   const stem = TIANGAN[i % 10];
@@ -20,7 +20,7 @@ for (let i = 0; i < 60; i++) {
   JIAZI_60.push(stem + branch);
 }
 
-// Earthly Branch Hidden Stems
+// 地支藏干
 const branchHiddenStems = {
   '子': ['癸'],
   '丑': ['己','癸','辛'],
@@ -51,7 +51,7 @@ const dominantHiddenStem = {
   '亥': '壬'
 };
 
-// Stem info
+// 天干資訊
 const stemInfo = {
   '甲': { element: 'wood',  yin: false },
   '乙': { element: 'wood',  yin: true  },
@@ -65,7 +65,7 @@ const stemInfo = {
   '癸': { element: 'water', yin: true  }
 };
 
-// Relationship maps
+// 五行生剋關係
 const outputs = {
   wood: 'fire',
   fire: 'earth',
@@ -95,7 +95,7 @@ const officer = {
   water: 'earth'
 };
 
-/** 2) Calculate Ten God using snippet rules */
+/** 2) 計算十神 */
 function calculateTenGod(dayStem, otherStem) {
   const dm = stemInfo[dayStem];
   const ot = stemInfo[otherStem];
@@ -104,30 +104,30 @@ function calculateTenGod(dayStem, otherStem) {
   const samePolarity = (dm.yin === ot.yin);
   const diffPolarity = !samePolarity;
 
-  // 1) 同我者 => 比肩(同性), 劫财(异性)
+  // 1) 同我者 => 比肩(同性), 劫財(異性)
   if (ot.element === dm.element) {
     return samePolarity ? '比肩' : '劫財';
   }
-  // 2) 我生者 => 食神(同性), 伤官(异性)
+  // 2) 我生者 => 食神(同性), 傷官(異性)
   if (outputs[dm.element] === ot.element) {
     return samePolarity ? '食神' : '傷官';
   }
-  // 3) 我克者 => 正财(异性), 偏财(同性)
+  // 3) 我克者 => 正財(異性), 偏財(同性)
   if (wealth[dm.element] === ot.element) {
     return diffPolarity ? '正財' : '偏財';
   }
-  // 4) 生我者 => 正印(异性), 偏印(同性)
+  // 4) 生我者 => 正印(異性), 偏印(同性)
   if (resources[dm.element] === ot.element) {
     return diffPolarity ? '正印' : '偏印';
   }
-  // 5) 克我者 => 正官(异性), 七杀(同性)
+  // 5) 克我者 => 正官(異性), 七殺(同性)
   if (officer[dm.element] === ot.element) {
     return diffPolarity ? '正官' : '七殺';
   }
   return '';
 }
 
-/** 3) Earthly Branch hidden stems => array of { stem, tenGod } */
+/** 3) 計算地支藏干的十神 */
 function calculateBranchTenGods(dayStem, branchChar) {
   const hiddenStems = branchHiddenStems[branchChar] || [];
   return hiddenStems.map(hs => ({
@@ -136,7 +136,7 @@ function calculateBranchTenGods(dayStem, branchChar) {
   }));
 }
 
-/** 4) Convert Heavenly Stem => Five Element label */
+/** 4) 天干轉五行 */
 function getStemElementChar(stemChar) {
   const map = {
     '甲': '木','乙': '木',
@@ -148,7 +148,7 @@ function getStemElementChar(stemChar) {
   return map[stemChar] || '';
 }
 
-/** 5) Count Five Elements (Heavenly Stems only) */
+/** 5) 計算五行數量（僅計算天干） */
 function countFiveElements(pillars) {
   const counts = { 木: 0, 火: 0, 土: 0, 金: 0, 水: 0 };
   for (let key in pillars) {
@@ -161,7 +161,7 @@ function countFiveElements(pillars) {
   return counts;
 }
 
-/** 6) Missing elements */
+/** 6) 找出缺失的五行 */
 function findMissingElements(counts) {
   const missing = [];
   for (let elem in counts) {
@@ -172,7 +172,7 @@ function findMissingElements(counts) {
   return missing;
 }
 
-/** 7) Simple Day Master Strength => Favorable Element */
+/** 7) 判斷日主強弱，找出喜用神 */
 function findFavorableElement(dayStem, counts) {
   const dm = stemInfo[dayStem];
   if (!dm) return '';
@@ -205,12 +205,12 @@ function findFavorableElement(dayStem, counts) {
   return isStrong ? controllingElemCN : resourceElemCN;
 }
 
-/** 8) Year Stem => Yang or Yin? */
+/** 8) 判斷年干為陽干還是陰干 */
 function isYangYearStem(stem) {
   return ['甲','丙','戊','庚','壬'].includes(stem);
 }
 
-/** 9) Step 60 JiaZi forward/back */
+/** 9) 甲子步進函數 (向前/向後) */
 function stepGanZhi(start, steps, forward=true) {
   const idx = JIAZI_60.indexOf(start);
   if (idx < 0) return start;
@@ -224,10 +224,10 @@ function stepGanZhi(start, steps, forward=true) {
   return JIAZI_60[newIndex];
 }
 
-/** 10) Placeholder for startAge calculation */
+/** 10) 計算起運年齡的占位函數 */
 /**
- * Get an array of solar terms in { name, date } ascending for a given year.
- * We'll parse the "JieQi table" from the lunar-javascript library.
+ * 獲取某年份的節氣數據 { name, date }，並按日期升序排序。
+ * 透過 lunar-javascript 函式庫解析 "節氣表"。
  */
 function getSolarTermsOfYear(year) {
   const allowedTerms = new Set(["立春","惊蛰","清明","立夏","芒种","小暑","立秋","白露","寒露","立冬","大雪","小寒"]);
@@ -237,7 +237,7 @@ function getSolarTermsOfYear(year) {
 
   const results = [];
   for (const termName in jieQiTable) {
-    // 只保留允许的“节”
+    // 只保留特定的“節”
     if (!allowedTerms.has(termName)) continue;
     
     const solarObj = jieQiTable[termName];
@@ -260,11 +260,12 @@ function getSolarTermsOfYear(year) {
   return results;
 }
 
+/** 查找距離出生時間最近的節氣 */
 function findSolarTerm(birthMoment, forward) {
   const birthDate = moment.tz(birthMoment, 'Asia/Shanghai');
   const birthYear = birthDate.year();
   
-  // Check 3 years to handle year boundaries
+  // 檢查前後3年，確保跨年時仍能找到節氣
   const yearsToCheck = forward 
     ? [birthYear - 1, birthYear, birthYear + 1]
     : [birthYear + 1, birthYear, birthYear - 1];
@@ -287,6 +288,7 @@ function findSolarTerm(birthMoment, forward) {
   }
 }
 
+/** 計算起運年齡 */
 function calculateStartAge(birthdate, birthtime, forward, timezone) {
   // 直接解析输入的上海时间，不再额外转换
   const birthMoment = moment.tz(`${birthdate} ${birthtime}`, 'YYYY-MM-DD HH:mm', timezone);
@@ -296,81 +298,92 @@ function calculateStartAge(birthdate, birthtime, forward, timezone) {
   const foundTerm = findSolarTerm(birthMoment.toDate(), forward);
   if (!foundTerm) return 0;
 
-  // 同样用输入的 timezone 解析节气时间
+  // 解析節氣時間
   const termMoment = moment.tz(foundTerm.date, timezone);
   
   // 调试输出
-  console.log(`出生时间: ${birthMoment.format('YYYY-MM-DD HH:mm')}`);
-  console.log(`选中的节气: ${foundTerm.name}，时间: ${termMoment.format('YYYY-MM-DD HH:mm')}`);
+  console.log(`出生時間: ${birthMoment.format('YYYY-MM-DD HH:mm')}`);
+  console.log(`選定的節氣: ${foundTerm.name}，時間: ${termMoment.format('YYYY-MM-DD HH:mm')}`);
   
   const diffMs = forward 
-    ? termMoment - birthMoment
+    ? termMoment  - birthMoment
     : birthMoment - termMoment;
 
+  console.log(`時間差 (毫秒): ${diffMs}`)
+
   const totalDays = Math.abs(diffMs) / (1000 * 3600 * 24);
-  console.log(`相差天数: ${totalDays.toFixed(2)} 天`);
+  console.log(`相差天數: ${totalDays.toFixed(2)} 日`);
 
   const startAge = totalDays / 3;
-  console.log(`计算出的起运年龄: ${startAge.toFixed(2)} 岁`);
+  console.log(`計算出的起運年齡: ${startAge.toFixed(2)} 歲`);
+
+  // 計算起運的完整年份
+  const years = Math.floor(totalDays / 3);
+  // 計算剩餘的天數
+  const remainingDays = totalDays % 3;
+  // 將剩餘的天數轉換為月與日
+  const months = Math.floor(remainingDays * 4); // 一天折合四個月
+  const days = (remainingDays * 4 - months) * 30; // 將月的小數部分轉換為天數，假設每月 30 天
+
+  console.log(`計算出的起運年齡: ${years} 歲 ${months} 個月 ${days.toFixed(0)} 日`);
 
   return startAge;
 }
 
 
-/** 11) Calculate DaYun array (now 10 cycles, with TenGod for each pillar) */
-function calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, timezone, roundingMethod = 'round') {
-  // 1) Determine direction
+/** 11) 計算大運陣列（10 個周期，每個大運帶有十神） */
+function calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, timezone) {
+  // 確定大運方向
   const yearStem = yearGZ[0];
   const isYearYang = ['甲','丙','戊','庚','壬'].includes(yearStem);
   const forward = (isYearYang && gender === 'male') || (!isYearYang && gender === 'female');
 
-  // 2) Calculate precise starting age (using the provided timezone directly)
+  // 計算準確的起運年齡（直接使用提供的時區）
   const rawAge = calculateStartAge(birthdate, birthtime, forward, timezone);
-  console.log(`原始起運年齡: ${rawAge.toFixed(2)} 岁`);
+  console.log(`原始起運年齡: ${rawAge.toFixed(2)} 歲`);
 
-  // 3) 根据 roundingMethod 进行处理
-  let roundedAge;
-  if (roundingMethod === 'ceil') {
-    roundedAge = Math.ceil(rawAge);
-  } else if (roundingMethod === 'round') {
-    roundedAge = Math.round(rawAge);
-  } else if (roundingMethod === 'floor') {
-    roundedAge = Math.floor(rawAge);
-  } else {
-    // 默认采用四舍五入
-    roundedAge = Math.round(rawAge);
-  }
-  console.log(`四舍五入后的起運年齡 (${roundingMethod}): ${roundedAge} 岁`);
+  const fullYears = Math.floor(rawAge);
+  const extraMonths = Math.floor((rawAge - fullYears) * 12);
 
-  // 4) 起运公历年份统一用出生年份加上取整后的起运年龄（无论顺行还是逆行）
-  const birthYear = parseInt(birthdate.split('-')[0], 10);
-  const startCalendarYear = birthYear + roundedAge;
+  const birthMoment = moment.tz(`${birthdate} ${birthtime}`, 'YYYY-MM-DD HH:mm', timezone);
+  // 計算大運開始時間，添加完整的年份與額外月份
+  const startMoment = birthMoment.clone()
+    .add(fullYears, 'years')
+    .add(extraMonths, 'months');
 
-  // 5) Validate monthGZ position
+  const startCalendarYear = startMoment.year();
+  const startCalendarMonth = startMoment.month() + 1;
+  console.log(`birthMoment ${birthMoment} , year ${startCalendarYear}, month ${startCalendarMonth}` )
+  const Age = startCalendarYear - birthMoment.year();
+
+  // 驗證月干支位置
   const baseIndex = JIAZI_60.indexOf(monthGZ);
   if (baseIndex < 0) {
     throw new Error(`Invalid month Ganzhi: ${monthGZ}`);
   }
 
-  // 6) Generate DaYun cycles
+  // 生成大運周期
   let currentPillar = stepGanZhi(monthGZ, 1, forward);
   const daYunList = [];
   
-  // 这里我们对每步大运的起运年龄和终止年龄都进行取整处理
-  let currentAge = roundedAge;
+  // 這裡我們對每個大運的起運年齡與終止年齡進行四捨五入處理
+  let currentAge = Age;
   let currentYear = startCalendarYear;
+  let currentMonth = startCalendarMonth;
+  let startYear = fullYears;
+  let startMonth = extraMonths;
 
   for (let i = 1; i <= 10; i++) {
-    // Calculate TenGod relationships
+    // 計算十神關係
     const daYunStem = currentPillar.charAt(0);
     const daYunTenGod = calculateTenGod(dayStem, daYunStem);
     
-    // Calculate hidden Branch relationships
+    // 計算地支藏干關係
     const daYunBranch = currentPillar.charAt(1);
     const fuXingArray = calculateBranchTenGods(dayStem, daYunBranch);
 
-    // 对当前运龄和结束运龄进行取整处理
-    const startAgeRounded = Math.round(currentAge);
+    // 對當前運齡與結束運齡進行取整處理
+    const startAgeRounded = Math.round(currentAge) + 1;
     const endAgeRounded = Math.round(currentAge + 10);
 
     daYunList.push({
@@ -381,10 +394,13 @@ function calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, 
       startAge: startAgeRounded,
       endAge: endAgeRounded,
       startCalendarYear: currentYear,
-      endCalendarYear: currentYear + 9 // 完整10年的跨度
+      endCalendarYear: currentYear + 9, // 完整10年的跨度
+      startCalendarMonth: currentMonth,
+      startYear: startYear,
+      startMonth: startMonth
     });
 
-    // Prepare next iteration
+    // 準備下一個循環
     currentAge += 10;
     currentYear += 10;
     currentPillar = stepGanZhi(currentPillar, 1, forward);
@@ -394,17 +410,17 @@ function calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, 
 }
 
 /**
- * Calculate 流年 (annual pillars) for age 1..100
- * Each year => baseYearIndex + i => pillar
- * Also show multiple hidden stems as “副星.”
+ * 計算流年（從 1 歲到 100 歲）
+ * 每一年 => baseYearIndex + i => 干支
+ * 也顯示地支藏干（副星）
  */
 function calculateLiuNian(yearGZ, dayStem, birthYear) {
   const baseIndex = JIAZI_60.indexOf(yearGZ);
   if (baseIndex < 0) return [];
 
   const liuNianList = [];
-  // We do age 1..100 => so birth year + i
-  for (let i = 1; i <= 100; i++) {
+  // 計算 1 到 100 歲的流年
+  for (let i = 0; i <= 100; i++) {
     const pillar = JIAZI_60[(baseIndex + i) % 60];
     const stem = pillar.charAt(0);
     const branch = pillar.charAt(1);
@@ -415,7 +431,7 @@ function calculateLiuNian(yearGZ, dayStem, birthYear) {
     const actualYear = birthYear + i;
 
     liuNianList.push({
-      age: i,
+      age: i + 1,
       pillar,
       tenGod: mainTenGod,
       fuXing: fuXingArray,
@@ -425,10 +441,8 @@ function calculateLiuNian(yearGZ, dayStem, birthYear) {
   return liuNianList;
 }
 
-/** 12) Main BaZi Calculation
- *     IMPORTANT: we add "gender" as a third param
- */
-function calculateBazi(birthdate, birthtime, gender) {
+/** 12) 主八字計算函數*/
+function calculateBazi(birthdate, birthtime, gender, timezone) {
   const [year, month, day] = birthdate.split('-').map(Number);
   const [hour] = birthtime.split(':').map(Number);
 
@@ -442,7 +456,7 @@ function calculateBazi(birthdate, birthtime, gender) {
     throw new Error('缺少干支數據');
   }
 
-  // 時柱
+  // 計算時柱
   const shichen = Math.floor((hour + 1) / 2) % 12;
   const dayStem = dayGZ[0];
   const dayStemIndex = TIANGAN.indexOf(dayStem);
@@ -460,7 +474,7 @@ function calculateBazi(birthdate, birthtime, gender) {
     時柱: timeGan + timeZhi
   };
 
-  // Heavenly Stems Ten Gods
+  // 天干十神計算
   const stemTenGod = {
     年柱: calculateTenGod(dayStem, yearGZ[0]),
     月柱: calculateTenGod(dayStem, monthGZ[0]),
@@ -468,7 +482,7 @@ function calculateBazi(birthdate, birthtime, gender) {
     時柱: calculateTenGod(dayStem, timeGan)
   };
 
-  // Earthly Branch hidden stems => array of { stem, tenGod }
+  // 地支藏干十神計算 => 陣列格式 { stem, tenGod }
   const branchTenGod = {
     年柱: calculateBranchTenGods(dayStem, yearGZ[1]),
     月柱: calculateBranchTenGods(dayStem, monthGZ[1]),
@@ -488,10 +502,10 @@ function calculateBazi(birthdate, birthtime, gender) {
   const missingElements   = findMissingElements(fiveElementCounts);
   const favorableElement  = findFavorableElement(dayStem, fiveElementCounts);
 
-  // Generate DaYun (eight 10-year luck pillars)
-  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem);
+  // 生成大運 (每 10 年一輪)
+  const daYun = calculateDaYun(yearGZ, monthGZ, birthdate, birthtime, gender, dayStem, timezone);
 
-  // 流年 => from age 1..100 => each with fuXing array
+  // 計算流年 (從 1 歲到 100 歲，每年一個干支)
   const birthYearNum = year;
   const liuNian = calculateLiuNian(yearGZ, dayStem, birthYearNum);
 
@@ -517,7 +531,7 @@ app.post('/api/bazi', (req, res) => {
     const { birthdate, birthtime, gender, timezone } = req.body;
 
     // Pass gender into calculateBazi
-    const result = calculateBazi(birthdate, birthtime, gender || 'male', timezone || null);
+    const result = calculateBazi(birthdate, birthtime, gender || 'male', timezone);
 
     return res.json(result);
   } catch (err) {
